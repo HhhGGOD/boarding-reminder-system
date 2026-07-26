@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="查询已值机但未登机旅客并记录催促操作" />
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span></div>
+        <div>
+          <p class="eyebrow">AIRPORT OPERATIONS</p>
+          <h1>{{ app_name }}</h1>
+        </div>
+      </div>
+      <div class="header-meta">
+        {% if demo_mode %}
+        <span class="demo-badge"><i></i> 演示模式</span>
+        {% endif %}
+        <div class="clock">
+          <strong id="clockTime">--:--:--</strong>
+          <span id="clockDate">----年--月--日</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero">
+        <div>
+          <p class="section-kicker">BOARDING ASSISTANCE</p>
+          <h2>让每一次催促，都发生在正确的时间。</h2>
+          <p>按日期与航班号查询，快速识别已值机但尚未登机的旅客。</p>
+        </div>
+        <div class="live-status">
+          <span class="pulse"></span>
+          <div><strong>数据服务正常</strong><small id="lastUpdated">等待首次查询</small></div>
+        </div>
+      </section>
+
+      <section class="search-panel" aria-labelledby="search-title">
+        <div class="panel-heading">
+          <div>
+            <span class="step-number">01</span>
+            <div><h3 id="search-title">定位航班</h3><p>输入运行日期和航班号</p></div>
+          </div>
+          <button id="resetButton" class="text-button" type="button">重置条件</button>
+        </div>
+        <form id="searchForm" class="search-form">
+          <label>
+            <span>航班日期</span>
+            <input id="flightDate" name="date" type="date" required />
+          </label>
+          <label>
+            <span>航班号</span>
+            <input
+              id="flightNo"
+              name="flightNo"
+              type="text"
+              maxlength="16"
+              placeholder="例如 MU5101"
+              autocomplete="off"
+            />
+          </label>
+          <button id="searchButton" class="primary-button" type="submit">
+            <span>查询未登机旅客</span><b aria-hidden="true">→</b>
+          </button>
+        </form>
+        <div class="quick-flights">
+          <span>演示航班</span>
+          <button type="button" data-flight="MU5101">MU5101</button>
+          <button type="button" data-flight="CA1888">CA1888</button>
+          <button type="button" data-flight="CZ6502">CZ6502</button>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace is-hidden">
+        <div class="flight-strip">
+          <div class="flight-identity">
+            <span class="step-number">02</span>
+            <div>
+              <p>当前航班</p>
+              <h3 id="selectedFlightNo">—</h3>
+            </div>
+            <div class="route">
+              <strong id="origin">—</strong>
+              <span><i></i><b>✦</b><i></i></span>
+              <strong id="destination">—</strong>
+            </div>
+          </div>
+          <div class="flight-facts">
+            <div><small>计划起飞</small><strong id="departureTime">—</strong></div>
+            <div><small>登机口</small><strong id="gateNo">—</strong></div>
+            <div><small>航班状态</small><strong id="flightStatus">—</strong></div>
+          </div>
+          <label class="flight-switcher">
+            <span>切换匹配航班</span>
+            <select id="flightSelect" aria-label="切换匹配航班"></select>
+          </label>
+        </div>
+
+        <div class="metrics-grid">
+          <article><span>已值机</span><strong id="checkedInCount">0</strong><small>人</small></article>
+          <article><span>已登机</span><strong id="boardedCount">0</strong><small>人</small></article>
+          <article class="metric-alert"><span>待登机</span><strong id="unboardedCount">0</strong><small>人</small></article>
+          <article><span>距关舱</span><strong id="closeCountdown">--</strong><small id="countdownUnit">分钟</small></article>
+        </div>
+
+        <section class="passenger-panel">
+          <div class="passenger-toolbar">
+            <div>
+              <span class="step-number">03</span>
+              <div><h3>未登机旅客</h3><p id="passengerHint">实时核对登机状态后再发起催促</p></div>
+            </div>
+            <div class="toolbar-actions">
+              <label class="table-search">
+                <span aria-hidden="true">⌕</span>
+                <input id="passengerFilter" type="search" placeholder="搜索姓名或座位" />
+              </label>
+              <button id="refreshButton" class="secondary-button" type="button">刷新状态</button>
+              <button id="openReminderButton" class="alert-button" type="button" disabled>
+                催促所选旅客 <span id="selectedCount">0</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th class="check-cell"><input id="selectAll" type="checkbox" aria-label="全选" /></th>
+                  <th>旅客</th>
+                  <th>座位</th>
+                  <th>旅客类型</th>
+                  <th>联系方式</th>
+                  <th>值机时间</th>
+                  <th>最近催促</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="passengerRows"></tbody>
+            </table>
+            <div id="tableEmpty" class="empty-state is-hidden">
+              <div class="empty-icon">✓</div>
+              <h4>当前没有待登机旅客</h4>
+              <p>所有已值机旅客均已完成登机，或没有匹配记录。</p>
+            </div>
+            <div id="tableLoading" class="loading-state is-hidden">
+              <span></span><span></span><span></span>
+              <p>正在核对登机状态…</p>
+            </div>
+          </div>
+          <footer class="table-footer">
+            <p>旅客联系方式已脱敏展示</p>
+            <button id="viewLogsButton" class="text-button" type="button">查看本航班催促记录 →</button>
+          </footer>
+        </section>
+      </section>
+
+      <section id="initialEmpty" class="initial-empty">
+        <div class="runway" aria-hidden="true"><span></span><span></span><span></span></div>
+        <h3>输入航班信息开始查询</h3>
+        <p>系统将关联航班、值机与登机记录，为你筛选出需要关注的旅客。</p>
+      </section>
+    </main>
+
+    <dialog id="reminderDialog" class="modal">
+      <form id="reminderForm" method="dialog">
+        <header>
+          <div><p>FINAL CALL</p><h3>发起登机催促</h3></div>
+          <button class="icon-button" data-close-dialog type="button" aria-label="关闭">×</button>
+        </header>
+        <div class="modal-body">
+          <div class="selection-summary">
+            <span>已选择</span><strong id="modalSelectedCount">0 位旅客</strong>
+            <small id="modalFlightInfo">—</small>
+          </div>
+          <fieldset>
+            <legend>催促方式</legend>
+            <div class="channel-grid">
+              <label><input type="radio" name="channel" value="SMS" checked /><span><b>短信</b><small>发送至预留手机号</small></span></label>
+              <label><input type="radio" name="channel" value="BROADCAST" /><span><b>广播</b><small>生成登机口广播任务</small></span></label>
+              <label><input type="radio" name="channel" value="PHONE" /><span><b>人工电话</b><small>生成坐席呼叫任务</small></span></label>
+            </div>
+          </fieldset>
+          <label class="message-field">
+            <span>催促内容</span>
+            <textarea id="reminderMessage" maxlength="500" rows="4"></textarea>
+            <small><span id="messageLength">0</span>/500</small>
+          </label>
+          <div class="notice">
+            <b>发送前将再次核验登机状态</b>
+            <p>已经登机或处于冷却时间内的旅客会自动跳过。</p>
+          </div>
+        </div>
+        <footer>
+          <button class="secondary-button" data-close-dialog type="button">取消</button>
+          <button id="sendReminderButton" class="alert-button" type="submit">确认发起催促</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="logsDialog" class="modal logs-modal">
+      <div>
+        <header>
+          <div><p>AUDIT TRAIL</p><h3>催促操作记录</h3></div>
+          <button class="icon-button" data-close-logs type="button" aria-label="关闭">×</button>
+        </header>
+        <div id="logsList" class="logs-list"></div>
+        <footer><button class="secondary-button" data-close-logs type="button">关闭</button></footer>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

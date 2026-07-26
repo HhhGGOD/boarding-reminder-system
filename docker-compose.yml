@@ -1,0 +1,14 @@
+services:
+  boarding-reminder:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/boarding_reminder.sqlite3
+      DEMO_MODE: "true"
+      REMINDER_COOLDOWN_SECONDS: "300"
+    volumes:
+      - boarding-data:/data
+
+volumes:
+  boarding-data:
