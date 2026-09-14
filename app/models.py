@@ -106,9 +106,7 @@ class ReminderLog(Base):
     __tablename__ = "boarding_reminder_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    flight_id: Mapped[str] = mapped_column(
-        ForeignKey("flight.id"), nullable=False, index=True
-    )
+    flight_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     passenger_id: Mapped[str] = mapped_column(String(64), nullable=False)
     passenger_name: Mapped[str] = mapped_column(String(80), nullable=False)
     channel: Mapped[str] = mapped_column(String(24), nullable=False)

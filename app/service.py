@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Flight, PassengerBoarding, PassengerCheckin, ReminderLog
+from app import oracle_repository
 
 
 ACTIVE_FLIGHT_STATUSES = ("CHECK_IN", "BOARDING", "FINAL_CALL", "DELAYED")
@@ -220,5 +221,128 @@ def create_reminders(
             }
         )
 
+    db.commit()
+    return {"sent": sent, "skipped": skipped}
+
+
+def list_flights_for_source(
+    db: Session, flight_date: date, flight_no: str | None = None
+) -> list[dict]:
+    if settings.is_oracle:
+        return oracle_repository.list_flights(flight_date, flight_no)
+    return list_flights(db, flight_date, flight_no)
+
+
+def flight_exists_for_source(db: Session, flight_id: str) -> bool:
+    if settings.is_oracle:
+        return oracle_repository.get_flight(flight_id) is not None
+    return db.get(Flight, flight_id) is not None
+
+
+def get_unboarded_for_source(db: Session, flight_id: str) -> list[dict]:
+    if not settings.is_oracle:
+        return get_unboarded_passengers(db, flight_id)
+
+    passengers = oracle_repository.get_unboarded_passengers(flight_id)
+    for passenger in passengers:
+        latest = db.scalar(
+            select(ReminderLog)
+            .where(
+                ReminderLog.flight_id == flight_id,
+                ReminderLog.passenger_id == passenger["passengerId"],
+            )
+            .order_by(ReminderLog.reminded_at.desc())
+            .limit(1)
+        )
+        if latest:
+            passenger["lastReminderAt"] = latest.reminded_at.isoformat()
+            passenger["lastReminderChannel"] = latest.channel
+            passenger["lastReminderStatus"] = latest.status
+    return passengers
+
+
+def create_reminders_for_source(
+    db: Session,
+    flight_id: str,
+    passenger_ids: list[str],
+    channel: str,
+    message: str | None,
+    operator_id: str,
+) -> dict:
+    if not settings.is_oracle:
+        return create_reminders(
+            db, flight_id, passenger_ids, channel, message, operator_id
+        )
+
+    flight = oracle_repository.get_flight(flight_id)
+    if not flight:
+        return {"sent": [], "skipped": [{"reason": "航班不存在"}]}
+
+    now = datetime.now().replace(microsecond=0)
+    cooldown_after = now - timedelta(seconds=settings.reminder_cooldown_seconds)
+    current_unboarded = {
+        passenger["passengerId"]: passenger
+        for passenger in oracle_repository.get_unboarded_passengers(flight_id)
+    }
+    default_message = (
+        f"温馨提示：您乘坐的 {flight['flightNo']} 航班即将结束登机，"
+        f"请尽快前往 {flight['gateNo']} 登机口。"
+    )
+    final_message = (message or default_message).strip()
+    sent: list[dict] = []
+    skipped: list[dict] = []
+
+    for passenger_id in passenger_ids:
+        passenger = current_unboarded.get(passenger_id)
+        if not passenger:
+            skipped.append(
+                {
+                    "passengerId": passenger_id,
+                    "reason": "旅客已登机或不在当前航班",
+                }
+            )
+            continue
+        recent = db.scalar(
+            select(ReminderLog)
+            .where(
+                ReminderLog.flight_id == flight_id,
+                ReminderLog.passenger_id == passenger_id,
+                ReminderLog.reminded_at >= cooldown_after,
+            )
+            .order_by(ReminderLog.reminded_at.desc())
+            .limit(1)
+        )
+        if recent:
+            skipped.append(
+                {
+                    "passengerId": passenger_id,
+                    "passengerName": passenger["passengerName"],
+                    "reason": "冷却时间内已催促，请勿重复发送",
+                }
+            )
+            continue
+        status = "SIMULATED" if settings.demo_mode else "QUEUED"
+        db.add(
+            ReminderLog(
+                flight_id=flight_id,
+                passenger_id=passenger_id,
+                passenger_name=passenger["passengerName"],
+                channel=channel,
+                message=final_message,
+                operator_id=operator_id,
+                reminded_at=now,
+                status=status,
+                provider_message_id=(
+                    f"demo-{uuid4()}" if settings.demo_mode else None
+                ),
+            )
+        )
+        sent.append(
+            {
+                "passengerId": passenger_id,
+                "passengerName": passenger["passengerName"],
+                "status": status,
+            }
+        )
     db.commit()
     return {"sent": sent, "skipped": skipped}

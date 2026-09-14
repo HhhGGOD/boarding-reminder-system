@@ -18,7 +18,7 @@
       </div>
       <div class="header-meta">
         {% if demo_mode %}
-        <span class="demo-badge"><i></i> 演示模式</span>
+        <span class="demo-badge"><i></i> {{ "Oracle 联调" if data_source == "oracle" else "演示模式" }}</span>
         {% endif %}
         <div class="clock">
           <strong id="clockTime">--:--:--</strong>
@@ -60,6 +60,7 @@
               name="flightNo"
               type="text"
               maxlength="16"
+              required
               placeholder="例如 MU5101"
               autocomplete="off"
             />
@@ -69,10 +70,14 @@
           </button>
         </form>
         <div class="quick-flights">
+          {% if data_source == "oracle" %}
+          <span>当前数据源</span><b class="source-chip">Oracle · DCS_SYS</b>
+          {% else %}
           <span>演示航班</span>
           <button type="button" data-flight="MU5101">MU5101</button>
           <button type="button" data-flight="CA1888">CA1888</button>
           <button type="button" data-flight="CZ6502">CZ6502</button>
+          {% endif %}
         </div>
       </section>
 
@@ -91,7 +96,7 @@
             </div>
           </div>
           <div class="flight-facts">
-            <div><small>计划起飞</small><strong id="departureTime">—</strong></div>
+            <div><small id="departureLabel">计划起飞</small><strong id="departureTime">—</strong></div>
             <div><small>登机口</small><strong id="gateNo">—</strong></div>
             <div><small>航班状态</small><strong id="flightStatus">—</strong></div>
           </div>
@@ -105,7 +110,7 @@
           <article><span>已值机</span><strong id="checkedInCount">0</strong><small>人</small></article>
           <article><span>已登机</span><strong id="boardedCount">0</strong><small>人</small></article>
           <article class="metric-alert"><span>待登机</span><strong id="unboardedCount">0</strong><small>人</small></article>
-          <article><span>距关舱</span><strong id="closeCountdown">--</strong><small id="countdownUnit">分钟</small></article>
+          <article><span id="timeMetricLabel">距关舱</span><strong id="closeCountdown">--</strong><small id="countdownUnit">分钟</small></article>
         </div>
 
         <section class="passenger-panel">
@@ -180,9 +185,7 @@
           <fieldset>
             <legend>催促方式</legend>
             <div class="channel-grid">
-              <label><input type="radio" name="channel" value="SMS" checked /><span><b>短信</b><small>发送至预留手机号</small></span></label>
-              <label><input type="radio" name="channel" value="BROADCAST" /><span><b>广播</b><small>生成登机口广播任务</small></span></label>
-              <label><input type="radio" name="channel" value="PHONE" /><span><b>人工电话</b><small>生成坐席呼叫任务</small></span></label>
+              <label><input type="radio" name="channel" value="BROADCAST" checked /><span><b>登机广播</b><small>生成登机口广播催促任务</small></span></label>
             </div>
           </fieldset>
           <label class="message-field">

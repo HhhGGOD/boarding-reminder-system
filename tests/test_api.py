@@ -8,6 +8,7 @@ TEST_DB = Path(__file__).with_name("test_boarding.sqlite3")
 if TEST_DB.exists():
     TEST_DB.unlink()
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB.as_posix()}"
+os.environ["DATA_SOURCE"] = "sqlite"
 os.environ["DEMO_MODE"] = "true"
 os.environ["REMINDER_COOLDOWN_SECONDS"] = "300"
 
@@ -22,7 +23,13 @@ def test_query_unboarded_and_create_reminder():
         assert health.status_code == 200
         assert health.json()["status"] == "ok"
 
-        flights = client.get("/api/flights")
+        missing_flight_no = client.get("/api/flights")
+        assert missing_flight_no.status_code == 422
+        blank_flight_no = client.get("/api/flights", params={"flight_no": " "})
+        assert blank_flight_no.status_code == 422
+        assert blank_flight_no.json()["detail"] == "请输入航班号后再查询"
+
+        flights = client.get("/api/flights", params={"flight_no": "MU5101"})
         assert flights.status_code == 200
         flight = flights.json()["items"][0]
         assert flight["checkedInCount"] >= flight["unboardedCount"]
@@ -36,7 +43,7 @@ def test_query_unboarded_and_create_reminder():
         reminder_payload = {
             "flight_id": flight["id"],
             "passenger_ids": [passenger["passengerId"]],
-            "channel": "SMS",
+            "channel": "BROADCAST",
             "message": "Please proceed to the boarding gate.",
             "operator_id": "pytest",
         }

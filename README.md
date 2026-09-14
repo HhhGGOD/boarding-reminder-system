@@ -2,7 +2,9 @@
 
 一个基于 FastAPI 的旅客催促登机系统第一版。系统关联航班、旅客值机和旅客登机数据，查询“已值机但尚未登机”的旅客，并对催促操作进行审计留痕。
 
-> 当前默认开启演示模式：催促操作会写入催促记录表，但不会真正发送短信、广播或电话任务。
+demo2 支持只读连接 Oracle `DCS_SYS` 下的 `TA_FLIGHT`、`TA_PSRBASICINFO` 和 `TAB_PSRSTATUS`。Oracle 只负责业务查询，催促审计仍保存在本地 SQLite，应用不会在 Oracle 中自动建表或写入演示数据。
+
+> 当前默认开启演示模式：广播催促操作会写入催促记录表，但不会真正触发广播任务。
 
 ## 已实现
 
@@ -10,7 +12,7 @@
 - 三表联查未登机旅客
 - 旅客姓名、座位、类型、脱敏联系方式展示
 - 单选、批量选择和批量催促
-- 短信、广播、人工电话三种渠道占位
+- 广播催促渠道占位
 - 发送前再次核验旅客登机状态
 - 五分钟重复催促冷却控制
 - 催促记录与操作人审计
@@ -53,10 +55,56 @@ uvicorn app.main:app --reload
 ## Docker 运行
 
 ```powershell
-docker compose up --build
+docker start oracle-free
+docker start boarding-reminder
+```
+```
+docker stop oracle-free
+docker stop boarding-reminder
 ```
 
+
 ## 数据库配置
+
+### Oracle demo2
+
+在项目根目录创建不会提交到 Git 的 `.env.local`：
+
+```text
+APP_NAME=登机协同台
+DATA_SOURCE=oracle
+DATABASE_URL=sqlite:///./boarding_reminder_audit.sqlite3
+DEMO_MODE=true
+REMINDER_COOLDOWN_SECONDS=300
+DEFAULT_OPERATOR=值机保障-Oracle联调
+ORACLE_HOST=127.0.0.1
+ORACLE_PORT=1521
+ORACLE_SERVICE_NAME=FREEPDB1
+ORACLE_USER=DCS_SYS
+ORACLE_PASSWORD=请填写本机密码
+ORACLE_SCHEMA=DCS_SYS
+ORACLE_CHECKED_IN_STATUSES=AC
+ORACLE_BOARDED_STATUSES=BD
+```
+
+安装依赖并运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
+健康检查：<http://127.0.0.1:8000/api/health>
+
+当前联查口径：
+
+```text
+TA_FLIGHT.FLT_ID = TA_PSRBASICINFO.SEG_FLTID
+TA_PSRBASICINFO.(SEG_FLTID, PSR_HOSTNBR)
+    = TAB_PSRSTATUS.(PSRB_FLTID, PSRB_HOSTNBR)
+PSR_STATUS = AC 表示纳入已值机旅客
+不存在 PSRB_STATUS = BD 的记录表示尚未登机
+```
 
 复制 `.env.example` 为 `.env`，或在运行环境中设置变量：
 
@@ -128,9 +176,7 @@ passenger_id       = 当前航段内的旅客唯一标识
 当前 `app/service.py` 中的 `create_reminders()` 只写入模拟结果。正式接入时建议新增独立适配器，例如：
 
 ```text
-app/integrations/sms.py
 app/integrations/broadcast.py
-app/integrations/call_center.py
 ```
 
 适配器应返回平台消息 ID 和发送状态，并写入 `boarding_reminder_log`。生产环境还建议增加：

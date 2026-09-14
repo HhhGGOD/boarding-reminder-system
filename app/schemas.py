@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 class ReminderRequest(BaseModel):
     flight_id: str = Field(min_length=1, max_length=64)
     passenger_ids: list[str] = Field(min_length=1, max_length=100)
-    channel: Literal["SMS", "BROADCAST", "PHONE"]
+    channel: Literal["BROADCAST"]
     message: str | None = Field(default=None, max_length=500)
     operator_id: str | None = Field(default=None, max_length=64)
 

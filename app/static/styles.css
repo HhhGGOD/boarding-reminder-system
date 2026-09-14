@@ -417,6 +417,17 @@ button:disabled {
   font-weight: 700;
 }
 
+.source-chip {
+  display: inline-block;
+  padding: 5px 9px;
+  border: 1px solid #dce7e9;
+  border-radius: 6px;
+  color: var(--teal);
+  background: #f4f9f9;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .workspace {
   margin-top: 18px;
 }
@@ -930,7 +941,7 @@ legend {
 
 .channel-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: 9px;
 }
 

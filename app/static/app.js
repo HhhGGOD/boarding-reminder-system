@@ -40,14 +40,20 @@ const statusLabels = {
 };
 
 const channelLabels = {
-  SMS: "短信",
   BROADCAST: "广播",
-  PHONE: "人工电话",
 };
 
 function localDateValue(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(`${value}T00:00:00`));
 }
 
 function formatTime(value) {
@@ -125,6 +131,15 @@ function updateClock() {
 
 function updateCountdown() {
   if (!state.selectedFlight) return;
+  if (!state.selectedFlight.boardingCloseAt) {
+    document.querySelector("#timeMetricLabel").textContent = "数据更新";
+    document.querySelector("#closeCountdown").textContent = formatTime(
+      state.selectedFlight.dataUpdatedAt,
+    );
+    document.querySelector("#countdownUnit").textContent = "时间";
+    return;
+  }
+  document.querySelector("#timeMetricLabel").textContent = "距关舱";
   const seconds = Math.round(
     (new Date(state.selectedFlight.boardingCloseAt).getTime() - Date.now()) /
       1000,
@@ -216,9 +231,13 @@ function renderFlight(flight) {
   document.querySelector("#selectedFlightNo").textContent = flight.flightNo;
   document.querySelector("#origin").textContent = flight.origin;
   document.querySelector("#destination").textContent = flight.destination;
-  document.querySelector("#departureTime").textContent = formatTime(
-    flight.scheduledDeparture,
-  );
+  const isOracle = state.config?.dataSource === "oracle";
+  document.querySelector("#departureLabel").textContent = isOracle
+    ? "航班日期"
+    : "计划起飞";
+  document.querySelector("#departureTime").textContent = isOracle
+    ? formatDate(flight.flightDate)
+    : formatTime(flight.scheduledDeparture);
   document.querySelector("#gateNo").textContent = flight.gateNo;
   document.querySelector("#flightStatus").textContent =
     statusLabels[flight.status] || flight.status;
@@ -253,10 +272,14 @@ async function loadPassengers() {
 }
 
 async function searchFlights() {
-  const query = new URLSearchParams({ date: elements.flightDate.value });
-  if (elements.flightNo.value.trim()) {
-    query.set("flight_no", elements.flightNo.value.trim().toUpperCase());
+  const flightNo = elements.flightNo.value.trim().toUpperCase();
+  if (!flightNo) {
+    toast("请输入航班号后再查询", true);
+    elements.flightNo.focus();
+    return;
   }
+  const query = new URLSearchParams({ date: elements.flightDate.value });
+  query.set("flight_no", flightNo);
   elements.searchButton.disabled = true;
   elements.searchButton.querySelector("span").textContent = "正在查询…";
   try {
@@ -276,7 +299,7 @@ async function searchFlights() {
     elements.flightSelect.innerHTML = state.flights
       .map(
         (flight) =>
-          `<option value="${escapeHtml(flight.id)}">${escapeHtml(flight.flightNo)} · ${escapeHtml(flight.origin)}—${escapeHtml(flight.destination)} · ${formatTime(flight.scheduledDeparture)}</option>`,
+          `<option value="${escapeHtml(flight.id)}">${escapeHtml(flight.flightNo)} · ${escapeHtml(flight.origin)}—${escapeHtml(flight.destination)} · ${state.config?.dataSource === "oracle" ? formatDate(flight.flightDate) : formatTime(flight.scheduledDeparture)}</option>`,
       )
       .join("");
     elements.workspace.classList.remove("is-hidden");
