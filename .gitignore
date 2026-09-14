@@ -3,7 +3,6 @@ __pycache__/
 *.sqlite3
 *.db
 .env
-.env.example
 .env.local
 .env.*.local
 .venv/
